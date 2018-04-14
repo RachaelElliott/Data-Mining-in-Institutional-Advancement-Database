@@ -1,0 +1,2866 @@
+---
+title: "Honors Project"
+author: "Rachael Elliott"
+date: "April 12, 2018"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '4'
+  html_notebook:
+    toc: yes
+    toc_depth: '4'
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+  <style type="text/css">
+  span.boxed {
+    border:5px solid gray;
+    border-radius:10px;
+    padding: 5px;
+  }
+span.invboxed {
+  border:5px solid gray;
+  padding: 5px;
+  border-radius:10px;
+  color: white;
+}
+table, td, th
+{
+  border:0px;
+}
+</style>
+  
+  
+```{r, include=FALSE, warning=FALSE}
+require(devtools)
+install_github("hrbrmstr/albersusa")
+require(dplyr)
+require(ggthemes)
+require(klaR)
+require(manipulate)
+require(maps)
+require(mosaic)
+require(plyr)
+require(ragtop)
+require(rpart)
+require(stringr)
+require(tidyr)
+require(tidyverse)
+require(viridis)
+require(zipcode)
+
+
+require(stats)
+
+```
+
+Read in the data and create a data frame
+
+```{r}
+WC <- read.csv("C:/Users/rachael/Documents/Honors/WCConstQ2.CSV")
+WC<-as.data.frame(WC)
+
+```
+
+
+View locations of gifts on USA map - density map
+
+```{r echo=FALSE}
+data(zipcode)
+WC$ZIP <- clean.zipcodes(WC$PreferredZIP)
+
+WC.zip<-aggregate(data.frame(count=WC$Name),list(zip=WC$ZIP,state=WC$PreferredState),length)
+
+WCZIP<- merge(WC.zip, zipcode, by='zip')
+
+US<-maps::map('state')
+
+ggplot(WCZIP,aes(longitude,latitude)) +
+  geom_polygon(data=US,aes(x=long,y=lat,group=group),color='gray',fill=NA,alpha=.35)+
+  geom_point(aes(color = count),size=.15,alpha=.25) +
+  xlim(-125,-65)+ylim(20,50)
+```
+
+
+Remove Conversion Data:
+
+```{r}
+"%!in%" <- function(x,table) match(x,table, nomatch = 0) == 0
+
+myfiltervector <- c("Conversion", "Conversion-141", "Conversion-142", "Conversion-143", "Conversion-144", "Conversion-145", "Conversion-146", "Conversion-147", "Conversion-148", "Conversion-149", "Conversion-150", "Conversion-151")
+
+WC <- filter(WC,FundDescription %!in% myfiltervector)
+
+head(WC)
+```
+
+Manipulate Fund Description: classify into fewer levels
+
+```{r}
+WC$FundDescription <- as.character(WC$FundDescription)
+
+WC %>% 
+  mutate(NewFundDescription = ifelse(grepl("Class of", FundDescription), "Other Giving", FundDescription)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription1 = ifelse(grepl("Scholarship", NewFundDescription), "Scholarship", NewFundDescription)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription2 = ifelse(grepl("Department", NewFundDescription1), "Department", NewFundDescription1)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription3 = ifelse(grepl("Grant", NewFundDescription2), "Scholarship", NewFundDescription2)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription4 = ifelse(grepl("Dept.", NewFundDescription3), "Department", NewFundDescription3)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription5 = ifelse(grepl("Grant", NewFundDescription4), "Scholarship", NewFundDescription4)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription6 = ifelse(grepl("Facilities", NewFundDescription5), "Other Giving", NewFundDescription5)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription7 = ifelse(grepl("Biology", NewFundDescription6), "Department", NewFundDescription6)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription8 = ifelse(grepl("Bright Future", NewFundDescription7), "Other Giving", NewFundDescription7)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription9 = ifelse(grepl("Bright Futures", NewFundDescription8), "Other Giving", NewFundDescription8)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription10 = ifelse(grepl("Award", NewFundDescription9), "Other Giving", NewFundDescription9)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription11 = ifelse(grepl("Drink", NewFundDescription10), "Other Giving", NewFundDescription10)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription12 = ifelse(grepl("Grable", NewFundDescription11), "Other Giving", NewFundDescription11)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription13 = ifelse(grepl("Hoyt", NewFundDescription12), "Other Giving", NewFundDescription12)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription14 = ifelse(grepl("Project", NewFundDescription13), "Other Giving", NewFundDescription13)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription15 = ifelse(grepl("Class Gift", NewFundDescription14), "Other Giving", NewFundDescription14)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription16 = ifelse(grepl("Class Fund", NewFundDescription15), "Other Giving", NewFundDescription15)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription17 = ifelse(grepl("TTO", NewFundDescription16), "Sports Fund", NewFundDescription16)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription18 = ifelse(grepl("Friends", NewFundDescription17), "Friends of the Library/Celebrity Series", NewFundDescription17)) -> WC
+
+WC %>% 
+  mutate(NewFundDescription19 = ifelse(grepl("Celebrity", NewFundDescription18), "Friends of the Library/Celebrity Series", NewFundDescription18)) -> WC
+
+WC %>% 
+  mutate(MergedFundDescription = ifelse(grepl("Unrestricted", NewFundDescription19), "Unrestricted Fund", NewFundDescription19)) -> WC
+
+for(i in 1:nrow(WC)) {
+  if(WC$MergedFundDescription[i] != "Unrestricted Fund") {
+    if(WC$MergedFundDescription[i] != "Sports Fund") {
+      if(WC$MergedFundDescription[i] != "Department") {
+        if(WC$MergedFundDescription[i] != "Scholarship") {
+          if(WC$MergedFundDescription[i] != "Other Giving") {
+            if(WC$MergedFundDescription[i] != "Friends of the Library/Celebrity Series") {
+              if(WC$MergedFundDescription[i] != "Westminster Student Emergency Fund") {
+                WC$MergedFundDescription[i] = "Other Giving"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+View(WC)
+
+```
+
+Old Fund Descriptin:
+
+```{r}
+count(WC$FundDescription)
+```
+
+New Fund Description:
+
+```{r}
+count(WC$MergedFundDescription)
+```
+
+
+
+
+Convert Age to Age Level:
+
+```{r}
+for(i in 1:nrow(WC)) {
+  if(is.na(WC$Age[i])) {
+    WC$AgeLevel[i] = "NA"
+  } else {
+    if(WC$Age[i] < 40 & WC$Age[i] >= 0) {
+  WC$AgeLevel[i] = "Under 40"
+} else if(WC$Age[i] >= 40 & WC$Age[i] < 65) {
+  WC$AgeLevel[i] = "40-64"
+} else if(WC$Age[i] >= 65 & WC$Age[i] < 75) {
+  WC$AgeLevel[i] = "65-74"
+} else if(WC$Age[i] >= 75) {
+  WC$AgeLevel[i] = "75+"
+} else {
+  WC$AgeLevel[i] = "NA"
+}
+  }
+
+}
+
+count(WC$AgeLevel)
+
+```
+
+remove NA's in age - only want people, not businesses
+
+```{r}
+myfiltervector1 <- c("NA")
+
+WC <- filter(WC,AgeLevel %!in% myfiltervector1)
+```
+
+Convert Average Gift Amount to Gift Level 
+
+```{r}
+for(i in 1:nrow(WC)) {
+if(WC$GiftAverageAmount[i] < 50 & WC$GiftAverageAmount[i] >= 0) {
+  WC$AverageGiftLevel1[i] = "0-49"
+} else if(WC$GiftAverageAmount[i] < 100  & WC$GiftAverageAmount[i] >= 50) {
+  WC$AverageGiftLevel1[i] = "50-99"
+} else if(WC$GiftAverageAmount[i] < 1000  & WC$GiftAverageAmount[i] >= 100) {
+  WC$AverageGiftLevel1[i] = "100-999"
+} else if(WC$GiftAverageAmount[i] >= 1000) {
+  WC$AverageGiftLevel1[i] = "1,000+"
+} else {
+  WC$AverageGiftLevel1[i] = "Other"
+}
+}
+count(WC$AverageGiftLevel1)
+```
+
+Remove Under $50 Gifts --> want large gifts
+
+```{r}
+myfiltervector2 <- c("0-49")
+
+WC <- filter(WC,AverageGiftLevel1 %!in% myfiltervector2)
+```
+
+
+Convert Frat/Sorority into yes/no question:
+
+```{r}
+for(i in 1:nrow(WC)) {
+  if(is.blank(WC$PrimaryEducationFratSorority[i])) {
+    WC$FratSorority[i] = "Not Recorded"
+  } else {
+    WC$FratSorority[i] = "Yes"
+  }
+}
+
+count(WC$FratSorority)
+```
+
+Convert Total Number of Gifts into levels: 
+
+```{r}
+WC$GiftTotalNumberOfGifts <- as.numeric(WC$GiftTotalNumberOfGifts_1)
+
+for(i in 1:nrow(WC)) {
+if(WC$GiftTotalNumberOfGifts[i] >= 0 & WC$GiftTotalNumberOfGifts[i] < 20) {
+  WC$TotalNumberOfGifts[i] = "0 - 19"
+} else if(WC$GiftTotalNumberOfGifts[i] >= 20 & WC$GiftTotalNumberOfGifts[i] < 30) {
+  WC$TotalNumberOfGifts[i] = "20 - 29"
+} else if(WC$GiftTotalNumberOfGifts[i] >= 30 & WC$GiftTotalNumberOfGifts[i] < 50) {
+  WC$TotalNumberOfGifts[i] = "30 - 49"
+} else if(WC$GiftTotalNumberOfGifts[i] >= 50) {
+  WC$TotalNumberOfGifts[i] = "50+"
+} else {
+  WC$TotalNumberOfGifts[i] = "NA"
+}
+}
+
+count(WC$TotalNumberOfGifts)
+```
+
+Clean Marital Status:
+```{r}
+for(i in 1:nrow(WC)) {
+  if(WC$MaritalStatus[i] == "Separated") {
+    WC$MaritalStatus[i] = "Divorced"
+  } else if(WC$MaritalStatus[i] == "Domestic Partner") {
+    WC$MaritalStatus[i] = "Married"
+  } else if(WC$MaritalStatus[i] == "") {
+    WC$MaritalStatus[i] = "Unknown" 
+  }
+}
+WC %>%
+  filter(MaritalStatus == "Divorced" | MaritalStatus == "Married" | MaritalStatus == "Single" | MaritalStatus == "Unknown" | MaritalStatus == "Widowed") -> WC
+count(WC$MaritalStatus)
+```
+
+Convert state into state categories based on time zone:
+
+```{r}
+glimpse(WC$PreferredState)
+WC$PreferredState <- as.character(WC$PreferredState)
+for(i in 1:nrow(WC)) {
+  if(WC$PreferredState[i] == "Washington" | WC$PreferredState[i] == "Oregon" | WC$PreferredState[i] == "California" | WC$PreferredState[i] == "Nevada") {
+    WC$State[i] = "Pacific TZ"
+  } else if(WC$PreferredState[i] == "Montana" | WC$PreferredState[i] == "Idaho" | WC$PreferredState[i] == "Wyoming" | WC$PreferredState[i] == "Utah" | WC$PreferredState[i] == "Colorado" | WC$PreferredState[i] == "Arizona" | WC$PreferredState[i] == "New Mexico") {
+    WC$State[i] = "Mountain TZ"
+  } else if(WC$PreferredState[i] == "North Dakota" | WC$PreferredState[i] == "Minnesota" | WC$PreferredState[i] == "South Dakota" | WC$PreferredState[i] == "Wisconsin" | WC$PreferredState[i] == "Nebraska" | WC$PreferredState[i] == "Iowa" | WC$PreferredState[i] == "Kansas" | WC$PreferredState[i] == "Missouri" | WC$PreferredState[i] == "Illinois" | WC$PreferredState[i] == "Oklahoma" | WC$PreferredState[i] == "Arkansas" | WC$PreferredState[i] == "Kentucky" | WC$PreferredState[i] == "Tennessee" | WC$PreferredState[i] == "Texas" | WC$PreferredState[i] == "Louisana" | WC$PreferredState[i] == "Mississippi" | WC$PreferredState[i] == "Alabama") {
+    WC$State[i] = "Central TZ"
+  } else if(WC$PreferredState[i] == "Michigan" | WC$PreferredState[i] == "Indiana" | WC$PreferredState[i] == "Ohio" | WC$PreferredState[i] == "Pennsylvania" | WC$PreferredState[i] == "New York" | WC$PreferredState[i] == "Vermont" | WC$PreferredState[i] == "Maine" | WC$PreferredState[i] == "New Hampshire" | WC$PreferredState[i] == "Massachusetts" | WC$PreferredState[i] == "Rhode Island" | WC$PreferredState[i] == "Connecticut" | WC$PreferredState[i] == "New Jersey" | WC$PreferredState[i] == "Delaware" | WC$PreferredState[i] == "Maryland" | WC$PreferredState[i] == "District of Columbia" | WC$PreferredState[i] == "West Virginia" | WC$PreferredState[i] == "Virginia" | WC$PreferredState[i] == "North Carolina" | WC$PreferredState[i] == "South Carolina" | WC$PreferredState[i] == "Georgia" | WC$PreferredState[i] == "Florida") {
+    WC$State[i] = "Eastern TZ"
+  } else {
+    WC$State[i] = "Unknown"
+  }
+}
+
+count(WC$State)
+```
+
+```{r}
+count(WC$Gender)
+```
+
+Model 2 Fields (cleaning):
+
+Clean Ethnicity:
+
+```{r}
+for(i in 1:nrow(WC)) {
+  if(WC$Ethnicity[i] == " ") {
+    WC$Ethnicity[i] = "Unknown"
+  } 
+  else if(WC$Ethnicity[i] == "Undisclosed (Race and Ethnicity unknown)") {
+    WC$Ethnicity[i] = "Unknown"
+  }
+}
+```
+
+Clean Education School Name:
+
+```{r}
+WC$PrimaryEducationSchoolName <- as.character(WC$PrimaryEducationSchoolName)
+for(i in 1:nrow(WC)) {
+  if(is.blank(WC$PrimaryEducationSchoolName[i])) {
+    WC$PrimaryEducationSchoolName[i] = "Unknown"
+  } 
+}
+```
+
+Clean Education Degree
+
+```{r}
+WC$PrimaryEducationDegree <- as.character(WC$PrimaryEducationDegree)
+for(i in 1:nrow(WC)) {
+  if(is.blank(WC$PrimaryEducationDegree[i])) {
+    WC$PrimaryEducationDegree[i] = "Unknown"
+  } else if(WC$PrimaryEducationDegree[i] == "BA/BS") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="BBA") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="BM") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="BPS") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="BSB") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="BSEd") {
+    WC$PrimaryEducationDegree[i] = "Other Undergraduate"
+  } else if(WC$PrimaryEducationDegree[i] =="MA") {
+    WC$PrimaryEducationDegree[i] = "Master's/Doctoral Degrees"
+  } else if(WC$PrimaryEducationDegree[i] =="ME/EdD") {
+    WC$PrimaryEducationDegree[i] = "Master's/Doctoral Degrees"
+  } else if(WC$PrimaryEducationDegree[i] =="MEd") {
+    WC$PrimaryEducationDegree[i] = "Master's/Doctoral Degrees"
+  }
+}
+```
+
+Clean Religion:
+
+```{r}
+WC$Religion <- as.character(WC$Religion)
+for(i in 1:nrow(WC)) {
+  if(WC$Religion[i] == "") {
+    WC$Religion[i] = "Unknown"
+  } else if(WC$Religion[i] == "Nothing Listed/Undisclosed") {
+    WC$Religion[i] = "Other"
+  } else if(WC$Religion[i] == "Other") {
+    WC$Religion[i] = "Other"
+  } else {
+    WC$Religion[i] = "Christian"
+  }
+}
+
+count(WC$Religion)
+```
+
+Convert Gift Type into fewer levels:
+
+```{r}
+WC$GiftType <- as.character(WC$GiftType)
+for(i in 1:nrow(WC)) {
+  if(WC$GiftType[i] == "Pay-Cash") {
+    WC$GiftType[i] = "Pay-Type"
+  } else if(WC$GiftType[i] == "Pay-Other") {
+    WC$GiftType[i] = "Pay-Type"
+  } else if(WC$GiftType[i] == "Pay-Stock/Property") {
+    WC$GiftType[i] = "Pay-Type"
+  } else if(WC$GiftType[i] == "Recurring Gift") {
+    WC$GiftType[i] = "Recurring or Stock/Property"
+  } else if(WC$GiftType[i] == "Recurring Gift Pay-Cash") {
+    WC$GiftType[i] = "Recurring or Stock/Property"
+  } else if(WC$GiftType[i] == "Stock/Property") {
+    WC$GiftType[i] = "Recurring or Stock/Property"
+  }
+}
+```
+
+Count Unknowns:
+
+```{r}
+count(WC$PrimaryEducationSchoolName)
+count(WC$Anonymous.)
+count(WC$Deceased)
+count(WC$Ethnicity) #48064 unknown
+count(WC$Religion)  #56704 unknown
+count(WC$PrimaryEducationDegree)
+count(WC$GiftType)
+```
+
+Statistics on the database:
+```{r}
+favstats(WC$GiftAverageAmount_1)
+boxplot(WC$GiftAverageAmount_1, horizontal=TRUE)
+boxplot(WC$GiftAverageAmount_1, outline=FALSE, horizontal=TRUE)
+histogram(WC$GiftAverageAmount_1, type="count", xlab="Average Gift Amount")
+
+max(WC$GiftAverageAmount_1)
+```
+
+Model 1 Stats:
+
+```{r}
+favstats(GiftAverageAmount_1 ~ Gender, data = WC)
+favstats(GiftAverageAmount_1 ~ AgeLevel, data = WC)
+favstats(GiftAverageAmount_1 ~ MaritalStatus, data = WC)
+favstats(GiftAverageAmount_1 ~ State, data = WC)
+favstats(GiftAverageAmount_1 ~ MergedFundDescription, data = WC)
+favstats(GiftAverageAmount_1 ~ FratSorority, data = WC)
+favstats(GiftAverageAmount_1 ~ TotalNumberOfGifts, data = WC)
+```
+
+```{r}
+boxplot(GiftAverageAmount_1 ~ Gender, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Gender", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ AgeLevel, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Age", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ MaritalStatus, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Marital Status", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ State, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "State", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ MergedFundDescription, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Fund Description", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ FratSorority, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Fraternity/Sorority", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ TotalNumberOfGifts, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Total Number of Gifts", horizontal=TRUE)
+```
+
+Model 2 Stats:
+
+```{r}
+favstats(GiftAverageAmount_1 ~ Anonymous., data = WC)
+favstats(GiftAverageAmount_1 ~ Deceased, data = WC)
+favstats(GiftAverageAmount_1 ~ Ethnicity, data = WC)
+favstats(GiftAverageAmount_1 ~ Religion, data = WC)
+favstats(GiftAverageAmount_1 ~ PrimaryEducationSchoolName, data = WC)
+favstats(GiftAverageAmount_1 ~ PrimaryEducationDegree, data = WC)
+favstats(GiftAverageAmount_1 ~ GiftType, data = WC)
+```
+
+```{r}
+
+boxplot(GiftAverageAmount_1 ~ Anonymous., data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Anonymous", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ Deceased, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Deceased", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ Ethnicity, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Ethnicity", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ Religion, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Religion", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ PrimaryEducationSchoolName, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Education School Name", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ PrimaryEducationDegree, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Education Degree", horizontal=TRUE)
+boxplot(GiftAverageAmount_1 ~ GiftType, data = WC, outline=FALSE, xlab = "Average Gift Amount", ylab = "Gift Type", horizontal=TRUE)
+```
+
+
+
+Split data into a training and testing set
+
+```{r}
+WCcopy <- WC
+WCcopy <- as.data.frame(WCcopy)
+```
+
+```{r}
+#Randomly shuffle the data
+yourData<-WCcopy[sample(nrow(WCcopy)),]
+
+#Create 10 equally size folds
+folds <- cut(seq(1,nrow(yourData)),breaks=10,labels=FALSE)
+
+#Perform 10 fold cross validation
+for(i in 1:10){
+    #Segement your data by fold using the which() function 
+    testIndexes <- which(folds==i,arr.ind=TRUE)
+    testData <- yourData[testIndexes, ]
+    trainData <- yourData[-testIndexes, ]
+    #Use the test and train data partitions however you desire...
+}
+```
+
+
+Cluster k-modes
+
+```{r}
+WCSubset <- subset(trainData, select = c(AverageGiftLevel1, MergedFundDescription, TotalNumberOfGifts, State, Gender, AgeLevel, MaritalStatus, FratSorority))
+```
+
+```{r}
+set.seed(5)
+clusterGroup <- kmodes(WCSubset, 20)
+```
+
+```{r}
+clusterGroup$Size
+clusterGroup$modes
+clusterGroup$withindiff
+```
+
+Bad Model:
+
+
+
+```{r}
+WCSubsetC <- subset(trainData, select = c(AverageGiftLevel1, Anonymous., PrimaryEducationSchoolName, Deceased, Ethnicity, PrimaryEducationDegree, Religion, GiftType))
+```
+
+```{r}
+set.seed(5)
+clusterGroupC <- kmodes(WCSubsetC, 20)
+```
+
+```{r}
+clusterGroupC$size
+clusterGroupC$modes
+clusterGroupC$withindiff
+```
+
+```{r}
+favstats(clusterGroup$withindiff)
+favstats(clusterGroup$size)
+
+favstats(clusterGroupC$withindiff)
+favstats(clusterGroupC$size)
+
+```
+
+```{r}
+myData <- cbind(rep(NA,20),rep(NA,20))
+myData <- as.data.frame(myData)
+for(i in 1:20) {
+  myData$metric1[i] = clusterGroup$size[i]/clusterGroup$withindiff[i]
+}
+for(i in 1:20) {
+  if(clusterGroupC$withindiff[i] == 0) {
+    myData$metric2[i] = 0
+  } else {
+    myData$metric2[i] = clusterGroupC$size[i]/clusterGroupC$withindiff[i]
+  }
+  
+}
+```
+
+```{r}
+favstats(myData$metric1)
+favstats(myData$metric2)
+```
+
+```{r}
+trainData$cluster <- clusterGroup$cluster
+trainData$clusterC <- clusterGroupC$cluster
+```
+
+```{r}
+for(i in 1:nrow(trainData)) {
+  if(trainData$clusterC[i] == 1) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 2) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 3) {
+    trainData$levelC[i] == "50-99"
+  } else if(trainData$clusterC[i] == 4) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 5) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 6) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 7) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 8) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 9) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 10) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 11) {
+    trainData$levelC[i]= "100-999"
+  } else if(trainData$clusterC[i] == 12) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 13) {
+    trainData$levelC[i]= "100-999"
+  } else if(trainData$clusterC[i] == 14) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 15) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 16) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 17) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 18) {
+    trainData$levelC[i] = "100-999"
+  } else if(trainData$clusterC[i] == 19) {
+    trainData$levelC[i] = "50-99"
+  } else if(trainData$clusterC[i] == 20) {
+    trainData$levelC[i] = "1,000+"
+  }
+}
+
+```
+
+```{r}
+m=0
+mm = 0
+# comparing algorithm to actual
+for(i in 1:nrow(trainData)) {
+  if(identical(trainData$levelC[i], trainData$AverageGiftLevel1[i])) {
+    m = m + 1
+  } else {
+    mm = mm + 1
+  }
+}
+
+m
+mm
+```
+
+```{r}
+clusterGroup$modes
+```
+
+```{r}
+for(i in 1:nrow(trainData)) {
+  if(trainData$cluster[i] == 1) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 2) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 3) {
+    trainData$level[i] == "50-99"
+  } else if(trainData$cluster[i] == 4) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 5) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 6) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 7) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 8) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 9) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 10) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 11) {
+    trainData$level[i]= "100-999"
+  } else if(trainData$cluster[i] == 12) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 13) {
+    trainData$level[i]= "100-999"
+  } else if(trainData$cluster[i] == 14) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 15) {
+    trainData$level[i] = "1,000+"
+  } else if(trainData$cluster[i] == 16) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 17) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 18) {
+    trainData$level[i] = "100-999"
+  } else if(trainData$cluster[i] == 19) {
+    trainData$level[i] = "50-99"
+  } else if(trainData$cluster[i] == 20) {
+    trainData$level[i] = "50-99"
+  }
+}
+
+```
+
+```{r}
+
+m1=0
+mm1 = 0
+# comparing algorithm to actual
+for(i in 1:nrow(trainData)) {
+  if(identical(trainData$level[i], trainData$AverageGiftLevel1[i])) {
+    m1 = m1 + 1
+  } else {
+    mm1 = mm1 + 1
+  }
+}
+
+m1
+mm1
+```
+
+
+____________________
+Decision Tree:
+
+First Decision Node:
+```{r}
+count(trainData$AverageGiftLevel1)
+```
+
+```{r}
+tally(MergedFundDescription ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription
+
+View(GiftvFundDescription)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvState
+
+View(GiftvState)
+```
+
+```{r}
+tally(Gender ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvGender
+
+View(GiftvGender)
+```
+
+```{r}
+tally(AgeLevel ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvAge
+
+View(GiftvAge)
+```
+
+```{r}
+tally(MaritalStatus ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus
+
+View(GiftvMaritalStatus)
+```
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvFrat
+
+View(GiftvFrat)
+```
+
+```{r}
+tally(TotalNumberOfGifts ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvTotalNumber
+
+View(GiftvTotalNumber)
+```
+
+
+Second decision node off of total number of gifts:
+```{r}
+count(trainData$TotalNumberOfGifts)
+
+Under20 <- filter(trainData, TotalNumberOfGifts == "0 - 19")
+TwentyTo29 <- filter(trainData, TotalNumberOfGifts == "20 - 29")
+ThirtyTo49 <- filter(trainData, TotalNumberOfGifts == "30 - 49")
+FiftyPlus <- filter(trainData, TotalNumberOfGifts == "50+")
+```
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Under20
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Under20
+
+tally(AgeLevel ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvAge.Under20
+
+tally(Gender ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvGender.Under20
+
+tally(State ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvState.Under20
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = Under20) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.Under20
+
+View(GiftvFundDescription.Under20)
+View(GiftvState.Under20)
+View(GiftvGender.Under20)
+View(GiftvAge.Under20)
+View(GiftvMaritalStatus.Under20)
+View(GiftvFrat.Under20)
+```
+
+```{r}
+count(Under20$AverageGiftLevel1)
+```
+
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvFrat.TwentyTo29
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.TwentyTo29
+
+tally(AgeLevel ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvAge.TwentyTo29
+
+tally(Gender ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvGender.TwentyTo29
+
+tally(State ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvState.TwentyTo29
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = TwentyTo29) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.TwentyTo29
+
+View(GiftvFundDescription.TwentyTo29)
+View(GiftvState.TwentyTo29)
+View(GiftvGender.TwentyTo29)
+View(GiftvAge.TwentyTo29)
+View(GiftvMaritalStatus.TwentyTo29)
+View(GiftvFrat.TwentyTo29)
+```
+
+```{r}
+count(TwentyTo29$AverageGiftLevel1)
+```
+
+
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvFrat.ThirtyTo49
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.ThirtyTo49
+
+tally(AgeLevel ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvAge.ThirtyTo49
+
+tally(Gender ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvGender.ThirtyTo49
+
+tally(State ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvState.ThirtyTo49
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = ThirtyTo49) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.ThirtyTo49
+
+View(GiftvFundDescription.ThirtyTo49)
+View(GiftvState.ThirtyTo49)
+View(GiftvGender.ThirtyTo49)
+View(GiftvAge.ThirtyTo49)
+View(GiftvMaritalStatus.ThirtyTo49)
+View(GiftvFrat.ThirtyTo49)
+```
+
+```{r}
+count(ThirtyTo49$AverageGiftLevel1)
+```
+
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvFrat.FiftyPlus
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.FiftyPlus
+
+tally(AgeLevel ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvAge.FiftyPlus
+
+tally(Gender ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvGender.FiftyPlus
+
+tally(State ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvState.FiftyPlus
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = FiftyPlus) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.FiftyPlus
+
+View(GiftvFundDescription.FiftyPlus)
+View(GiftvState.FiftyPlus)
+View(GiftvGender.FiftyPlus)
+View(GiftvAge.FiftyPlus)
+View(GiftvMaritalStatus.FiftyPlus)
+View(GiftvFrat.FiftyPlus)
+```
+
+```{r}
+count(FiftyPlus$AverageGiftLevel1)
+```
+
+Under 20 Third decision node:
+```{r}
+Under40.U20 <- filter(Under20, AgeLevel == "Under 40")
+FortyTo64.U20 <- filter(Under20, AgeLevel == "40-64")
+SixtyfiveTo74.U20 <- filter(Under20, AgeLevel == "65-74")
+SeventyfivePlus.U20 <- filter(Under20, AgeLevel == "75+")
+```
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = Under40.U20) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Under40.U20
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Under40.U20) -> t
+as.data.frame.matrix(t) -> GiftvMarital.Under40.U20
+
+tally(Gender ~ AverageGiftLevel1, data = Under40.U20) -> t
+as.data.frame.matrix(t) -> GiftvGender.Under40.U20
+
+tally(State ~ AverageGiftLevel1, data = Under40.U20) -> t
+as.data.frame.matrix(t) -> GiftvState.Under40.U20
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = Under40.U20) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.Under40.U20
+
+View(GiftvFundDescription.Under40.U20)
+View(GiftvState.Under40.U20)
+View(GiftvGender.Under40.U20)
+View(GiftvMarital.Under40.U20)
+View(GiftvFrat.Under40.U20)
+```
+
+```{r}
+count(Under40.U20$AverageGiftLevel1)
+```
+
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = FortyTo64.U20) -> t
+as.data.frame.matrix(t) -> GiftvFrat.FortyTo64.U20
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = FortyTo64.U20) -> t
+as.data.frame.matrix(t) -> GiftvMarital.FortyTo64.U20
+
+tally(Gender ~ AverageGiftLevel1, data = FortyTo64.U20) -> t
+as.data.frame.matrix(t) -> GiftvGender.FortyTo64.U20
+
+tally(State ~ AverageGiftLevel1, data = FortyTo64.U20) -> t
+as.data.frame.matrix(t) -> GiftvState.FortyTo64.U20
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = FortyTo64.U20) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.FortyTo64.U20
+
+View(GiftvFundDescription.FortyTo64.U20)
+View(GiftvState.FortyTo64.U20)
+View(GiftvGender.FortyTo64.U20)
+View(GiftvMarital.FortyTo64.U20)
+View(GiftvFrat.FortyTo64.U20)
+```
+
+```{r}
+count(FortyTo64.U20$AverageGiftLevel1)
+```
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = SixtyfiveTo74.U20) -> t
+as.data.frame.matrix(t) -> GiftvFrat.SixtyfiveTo74.U20
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = SixtyfiveTo74.U20) -> t
+as.data.frame.matrix(t) -> GiftvMarital.SixtyfiveTo74.U20
+
+tally(Gender ~ AverageGiftLevel1, data = SixtyfiveTo74.U20) -> t
+as.data.frame.matrix(t) -> GiftvGender.SixtyfiveTo74.U20
+
+tally(State ~ AverageGiftLevel1, data = SixtyfiveTo74.U20) -> t
+as.data.frame.matrix(t) -> GiftvState.SixtyfiveTo74.U20
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = SixtyfiveTo74.U20) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.SixtyfiveTo74.U20
+
+View(GiftvFundDescription.SixtyfiveTo74.U20)
+View(GiftvState.SixtyfiveTo74.U20)
+View(GiftvGender.SixtyfiveTo74.U20)
+View(GiftvMarital.SixtyfiveTo74.U20)
+View(GiftvFrat.SixtyfiveTo74.U20)
+```
+
+```{r}
+count(SixtyfiveTo74.U20$AverageGiftLevel1)
+```
+
+
+```{r}
+tally(FratSorority ~ AverageGiftLevel1, data = SeventyfivePlus.U20) -> t
+as.data.frame.matrix(t) -> GiftvFrat.SeventyfivePlus.U20
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = SeventyfivePlus.U20) -> t
+as.data.frame.matrix(t) -> GiftvMarital.SeventyfivePlus.U20
+
+tally(Gender ~ AverageGiftLevel1, data = SeventyfivePlus.U20) -> t
+as.data.frame.matrix(t) -> GiftvGender.SeventyfivePlus.U20
+
+tally(State ~ AverageGiftLevel1, data = SeventyfivePlus.U20) -> t
+as.data.frame.matrix(t) -> GiftvState.SeventyfivePlus.U20
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = SeventyfivePlus.U20) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.SeventyfivePlus.U20
+
+View(GiftvFundDescription.SeventyfivePlus.U20)
+View(GiftvState.SeventyfivePlus.U20)
+View(GiftvGender.SeventyfivePlus.U20)
+View(GiftvMarital.SeventyfivePlus.U20)
+View(GiftvFrat.SeventyfivePlus.U20)
+```
+
+```{r}
+count(SeventyfivePlus.U20$AverageGiftLevel1)
+```
+
+
+
+```{r}
+count(TwentyTo29$AgeLevel)
+Under40 <- filter(TwentyTo29, AgeLevel == "Under 40")
+FortyTo64 <- filter(TwentyTo29, AgeLevel == "40-64")
+SixtyfiveTo74 <- filter(TwentyTo29, AgeLevel == "65-74")
+SeventyfivePlus <- filter(TwentyTo29, AgeLevel == "75+")
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Under40) -> t
+as.data.frame.matrix(t) -> GiftvState.Under40
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = Under40) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.Under40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Under40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Under40
+
+tally(Gender ~ AverageGiftLevel1, data = Under40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Under40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Under40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Under40
+
+View(GiftvFrat.Under40)
+View(GiftvGender.Under40)
+View(GiftvMaritalStatus.Under40)
+View(GiftvFundDescription.Under40)
+View(GiftvState.Under40)
+```
+
+```{r}
+count(Under40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = FortyTo64) -> t
+as.data.frame.matrix(t) -> GiftvState.FortyTo64
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = FortyTo64) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.FortyTo64
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = FortyTo64) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.FortyTo64
+
+tally(Gender ~ AverageGiftLevel1, data = FortyTo64) -> t
+as.data.frame.matrix(t) -> GiftvGender.FortyTo64
+
+tally(FratSorority ~ AverageGiftLevel1, data = FortyTo64) -> t
+as.data.frame.matrix(t) -> GiftvFrat.FortyTo64
+
+View(GiftvFrat.FortyTo64)
+View(GiftvGender.FortyTo64)
+View(GiftvMaritalStatus.FortyTo64)
+View(GiftvFundDescription.FortyTo64)
+View(GiftvState.FortyTo64)
+```
+
+```{r}
+count(FortyTo64$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = SixtyfiveTo74) -> t
+as.data.frame.matrix(t) -> GiftvState.SixtyfiveTo74
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = SixtyfiveTo74) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.SixtyfiveTo74
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = SixtyfiveTo74) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.SixtyfiveTo74
+
+tally(Gender ~ AverageGiftLevel1, data = SixtyfiveTo74) -> t
+as.data.frame.matrix(t) -> GiftvGender.SixtyfiveTo74
+
+tally(FratSorority ~ AverageGiftLevel1, data = SixtyfiveTo74) -> t
+as.data.frame.matrix(t) -> GiftvFrat.SixtyfiveTo74
+
+View(GiftvFrat.SixtyfiveTo74)
+View(GiftvGender.SixtyfiveTo74)
+View(GiftvMaritalStatus.SixtyfiveTo74)
+View(GiftvFundDescription.SixtyfiveTo74)
+View(GiftvState.SixtyfiveTo74)
+```
+
+```{r}
+count(SixtyfiveTo74$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = SeventyfivePlus) -> t
+as.data.frame.matrix(t) -> GiftvState.SeventyfivePlus
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = SeventyfivePlus) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.SeventyfivePlus
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = SeventyfivePlus) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.SeventyfivePlus
+
+tally(Gender ~ AverageGiftLevel1, data = SeventyfivePlus) -> t
+as.data.frame.matrix(t) -> GiftvGender.SeventyfivePlus
+
+tally(FratSorority ~ AverageGiftLevel1, data = SeventyfivePlus) -> t
+as.data.frame.matrix(t) -> GiftvFrat.SeventyfivePlus
+
+View(GiftvFrat.SeventyfivePlus)
+View(GiftvGender.SeventyfivePlus)
+View(GiftvMaritalStatus.SeventyfivePlus)
+View(GiftvFundDescription.SeventyfivePlus)
+View(GiftvState.SeventyfivePlus)
+```
+
+```{r}
+count(SeventyfivePlus$AverageGiftLevel1)
+```
+
+```{r}
+count(ThirtyTo49$Gender)
+Female <- filter(ThirtyTo49, Gender == "Female")
+Male <- filter(ThirtyTo49, Gender == "Male")
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Female) -> t
+as.data.frame.matrix(t) -> GiftvState.Female
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = Female) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.Female
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Female) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Female
+
+tally(AgeLevel ~ AverageGiftLevel1, data = Female) -> t
+as.data.frame.matrix(t) -> GiftvAge.Female
+
+tally(FratSorority ~ AverageGiftLevel1, data = Female) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Female
+
+View(GiftvFrat.Female)
+View(GiftvAge.Female)
+View(GiftvMaritalStatus.Female)
+View(GiftvFundDescription.Female)
+View(GiftvState.Female)
+```
+
+```{r}
+count(Female$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Male) -> t
+as.data.frame.matrix(t) -> GiftvState.Male
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = Male) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.Male
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Male) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Male
+
+tally(AgeLevel ~ AverageGiftLevel1, data = Male) -> t
+as.data.frame.matrix(t) -> GiftvAge.Male
+
+tally(FratSorority ~ AverageGiftLevel1, data = Male) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Male
+
+View(GiftvFrat.Male)
+View(GiftvAge.Male)
+View(GiftvMaritalStatus.Male)
+View(GiftvFundDescription.Male)
+View(GiftvState.Male)
+```
+
+```{r}
+count(Male$AverageGiftLevel1)
+```
+
+
+```{r}
+count(FiftyPlus$FratSorority)
+NoFrat <- filter(FiftyPlus, FratSorority == "Not Recorded")
+YesFrat <- filter(FiftyPlus, FratSorority == "Yes")
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = NoFrat) -> t
+as.data.frame.matrix(t) -> GiftvState.NoFrat
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = NoFrat) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.NoFrat
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = NoFrat) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.NoFrat
+
+tally(AgeLevel ~ AverageGiftLevel1, data = NoFrat) -> t
+as.data.frame.matrix(t) -> GiftvAge.NoFrat
+
+tally(Gender ~ AverageGiftLevel1, data = NoFrat) -> t
+as.data.frame.matrix(t) -> GiftvGender.NoFrat
+
+View(GiftvGender.NoFrat)
+View(GiftvAge.NoFrat)
+View(GiftvMaritalStatus.NoFrat)
+View(GiftvFundDescription.NoFrat)
+View(GiftvState.NoFrat)
+```
+
+```{r}
+count(NoFrat$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = YesFrat) -> t
+as.data.frame.matrix(t) -> GiftvState.YesFrat
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = YesFrat) -> t
+as.data.frame.matrix(t) -> GiftvFundDescription.YesFrat
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = YesFrat) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.YesFrat
+
+tally(AgeLevel ~ AverageGiftLevel1, data = YesFrat) -> t
+as.data.frame.matrix(t) -> GiftvAge.YesFrat
+
+tally(Gender ~ AverageGiftLevel1, data = YesFrat) -> t
+as.data.frame.matrix(t) -> GiftvGender.YesFrat
+
+View(GiftvGender.YesFrat)
+View(GiftvAge.YesFrat)
+View(GiftvMaritalStatus.YesFrat)
+View(GiftvFundDescription.YesFrat)
+View(GiftvState.YesFrat)
+```
+
+```{r}
+count(YesFrat$AverageGiftLevel1)
+```
+
+Third branch: Total Number of Gifts:Under 20 --> Age:Under40 --> State
+```{r}
+count(Under40.U20$State)
+```
+
+```{r}
+Central.U40 <- filter(Under40.U20, State == "Central TZ")
+Eastern.U40 <- filter(Under40.U20, State == "Eastern TZ")
+Mountain.U40 <- filter(Under40.U20, State == "Mountain TZ")
+Pacific.U40 <- filter(Under40.U20, State == "Pacific TZ")
+```
+
+
+```{r}
+count(Central.U40$AverageGiftLevel1)
+```
+
+```{r}
+count(Eastern.U40$AverageGiftLevel1)
+```
+
+```{r}
+count(Mountain.U40$AverageGiftLevel1)
+```
+
+```{r}
+count(Pacific.U40$AverageGiftLevel1)
+```
+
+Third branch: Total Number of Gifts:Under 20 --> Age:40-64 --> Fund Description
+```{r}
+count(FortyTo64.U20$MergedFundDescription)
+```
+
+```{r}
+Department40 <- filter(FortyTo64.U20, MergedFundDescription == "Department")
+Friends40 <- filter(FortyTo64.U20, MergedFundDescription == "Friends of the Library/Celebrity Series")
+Other40 <- filter(FortyTo64.U20, MergedFundDescription == "Other Giving")
+Scholarship40 <- filter(FortyTo64.U20, MergedFundDescription == "Scholarship")
+Sports40 <- filter(FortyTo64.U20, MergedFundDescription == "Sports Fund")
+Unrestricted40 <- filter(FortyTo64.U20, MergedFundDescription == "Unrestricted Fund")
+Emergency40 <- filter(FortyTo64.U20, MergedFundDescription == "Westminster Student Emergency Fund")
+```
+
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Department40) -> t
+as.data.frame.matrix(t) -> GiftvState.Department40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Department40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Department40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Department40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Department40
+
+tally(Gender ~ AverageGiftLevel1, data = Department40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Department40
+
+View(GiftvGender.Department40)
+View(GiftvFrat.Department40)
+View(GiftvMaritalStatus.Department40)
+View(GiftvState.Department40)
+
+count(Department40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Friends40) -> t
+as.data.frame.matrix(t) -> GiftvState.Friends40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Friends40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Friends40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Friends40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Friends40
+
+tally(Gender ~ AverageGiftLevel1, data = Friends40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Friends40
+
+View(GiftvGender.Friends40)
+View(GiftvFrat.Friends40)
+View(GiftvMaritalStatus.Friends40)
+View(GiftvState.Friends40)
+
+count(Friends40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Other40) -> t
+as.data.frame.matrix(t) -> GiftvState.Other40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Other40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Other40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Other40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Other40
+
+tally(Gender ~ AverageGiftLevel1, data = Other40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Other40
+
+View(GiftvGender.Other40)
+View(GiftvFrat.Other40)
+View(GiftvMaritalStatus.Other40)
+View(GiftvState.Other40)
+
+count(Other40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Scholarship40) -> t
+as.data.frame.matrix(t) -> GiftvState.Scholarship40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Scholarship40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Scholarship40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Scholarship40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Scholarship40
+
+tally(Gender ~ AverageGiftLevel1, data = Scholarship40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Scholarship40
+
+View(GiftvGender.Scholarship40)
+View(GiftvFrat.Scholarship40)
+View(GiftvMaritalStatus.Scholarship40)
+View(GiftvState.Scholarship40)
+
+count(Scholarship40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Sports40) -> t
+as.data.frame.matrix(t) -> GiftvState.Sports40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Sports40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Sports40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Sports40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Sports40
+
+tally(Gender ~ AverageGiftLevel1, data = Sports40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Sports40
+
+View(GiftvGender.Sports40)
+View(GiftvFrat.Sports40)
+View(GiftvMaritalStatus.Sports40)
+View(GiftvState.Sports40)
+
+count(Sports40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Unrestricted40) -> t
+as.data.frame.matrix(t) -> GiftvState.Unrestricted40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Unrestricted40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Unrestricted40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Unrestricted40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Unrestricted40
+
+tally(Gender ~ AverageGiftLevel1, data = Unrestricted40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Unrestricted40
+
+View(GiftvGender.Unrestricted40)
+View(GiftvFrat.Unrestricted40)
+View(GiftvMaritalStatus.Unrestricted40)
+View(GiftvState.Unrestricted40)
+
+count(Unrestricted40$AverageGiftLevel1)
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = Emergency40) -> t
+as.data.frame.matrix(t) -> GiftvState.Emergency40
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = Emergency40) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.Emergency40
+
+tally(FratSorority ~ AverageGiftLevel1, data = Emergency40) -> t
+as.data.frame.matrix(t) -> GiftvFrat.Emergency40
+
+tally(Gender ~ AverageGiftLevel1, data = Emergency40) -> t
+as.data.frame.matrix(t) -> GiftvGender.Emergency40
+
+View(GiftvGender.Emergency40)
+View(GiftvFrat.Emergency40)
+View(GiftvMaritalStatus.Emergency40)
+View(GiftvState.Emergency40)
+
+count(Emergency40$AverageGiftLevel1)
+```
+
+
+Third branch: Total Number of Gifts:Under 20 --> Age:65-74 --> Frat
+```{r}
+count(SixtyfiveTo74.U20$FratSorority)
+```
+
+```{r}
+NotRecorded65 <- filter(SixtyfiveTo74.U20, FratSorority == "Not Recorded")
+Yes65 <- filter(SixtyfiveTo74.U20, FratSorority == "Yes")
+```
+
+```{r}
+tally(State ~ AverageGiftLevel1, data = NotRecorded65) -> t
+as.data.frame.matrix(t) -> GiftvState.NotRecorded65
+
+tally(MaritalStatus ~ AverageGiftLevel1, data = NotRecorded65) -> t
+as.data.frame.matrix(t) -> GiftvMaritalStatus.NotRecorded65
+
+tally(MergedFundDescription ~ AverageGiftLevel1, data = NotRecorded65) -> t
+as.data.frame.matrix(t) -> GiftvFD.NotRecorded65
+
+tally(Gender ~ AverageGiftLevel1, data = NotRecorded65) -> t
+as.data.frame.matrix(t) -> GiftvGender.NotRecorded65
+
+View(GiftvGender.NotRecorded65)
+View(GiftvFD.NotRecorded65)
+View(GiftvMaritalStatus.NotRecorded65)
+View(GiftvState.NotRecorded65)
+
+count(NotRecorded65$AverageGiftLevel1)
+```
+
+```{r}
+count(Yes65$AverageGiftLevel1)
+```
+
+```{r}
+count(SeventyfivePlus.U20$State)
+```
+
+```{r}
+Central75 <- filter(SeventyfivePlus.U20, State == "Central TZ")
+Eastern75 <- filter(SeventyfivePlus.U20, State == "Eastern TZ")
+Mountain75 <- filter(SeventyfivePlus.U20, State == "Mountain TZ")
+Pacific75 <- filter(SeventyfivePlus.U20, State == "Pacific TZ")
+```
+
+```{r}
+count(Central75$AverageGiftLevel1)
+count(Eastern75$AverageGiftLevel1)
+count(Mountain75$AverageGiftLevel1)
+count(Pacific75$AverageGiftLevel1)
+```
+
+```{r}
+count(Under40$MergedFundDescription)
+```
+
+
+```{r}
+DepartmentUnder40 <- filter(Under40, MergedFundDescription == "Department")
+FriendsUnder40 <- filter(Under40, MergedFundDescription == "Friends of the Library/Celebrity Series")
+OtherUnder40 <- filter(Under40, MergedFundDescription == "Other Giving")
+ScholarshipUnder40 <- filter(Under40, MergedFundDescription == "Scholarship")
+SportsUnder40 <- filter(Under40, MergedFundDescription == "Sports Fund")
+UnrestrictedUnder40 <- filter(Under40, MergedFundDescription == "Unrestricted Fund")
+```
+
+```{r}
+count(DepartmentUnder40$AverageGiftLevel1)
+count(FriendsUnder40$AverageGiftLevel1)
+count(OtherUnder40$AverageGiftLevel1)
+count(ScholarshipUnder40$AverageGiftLevel1)
+count(SportsUnder40$AverageGiftLevel1)
+count(UnrestrictedUnder40$AverageGiftLevel1)
+```
+
+```{r}
+count(FortyTo64$MergedFundDescription)
+```
+
+```{r}
+Department4064 <- filter(FortyTo64, MergedFundDescription == "Department")
+Friends4064 <- filter(FortyTo64, MergedFundDescription == "Friends of the Library/Celebrity Series")
+Other4064 <- filter(FortyTo64, MergedFundDescription == "Other Giving")
+Scholarship4064 <- filter(FortyTo64, MergedFundDescription == "Scholarship")
+Sports4064 <- filter(FortyTo64, MergedFundDescription == "Sports Fund")
+Unrestricted4064 <- filter(FortyTo64, MergedFundDescription == "Unrestricted Fund")
+Emergency4064 <- filter(FortyTo64, MergedFundDescription == "Westminster Student Emergency Fund")
+```
+
+```{r}
+count(Department4064$AverageGiftLevel1)
+count(Friends4064$AverageGiftLevel1)
+count(Other4064$AverageGiftLevel1)
+count(Scholarship4064$AverageGiftLevel1)
+count(Sports4064$AverageGiftLevel1)
+count(Unrestricted4064$AverageGiftLevel1)
+count(Emergency4064$AverageGiftLevel1)
+```
+
+```{r}
+count(SixtyfiveTo74$Gender)
+Female65 <- filter(SixtyfiveTo74, Gender == "Female")
+Male65 <- filter(SixtyfiveTo74, Gender == "Male")
+```
+
+```{r}
+count(Female65$AverageGiftLevel1)
+count(Male65$AverageGiftLevel1)
+```
+
+```{r}
+count(SeventyfivePlus$MergedFundDescription)
+Department75 <- filter(SeventyfivePlus, MergedFundDescription == "Department")
+Friends75 <- filter(SeventyfivePlus, MergedFundDescription == "Friends of the Library/Celebrity Series")
+Other75 <- filter(SeventyfivePlus, MergedFundDescription == "Other Giving")
+Scholarship75 <- filter(SeventyfivePlus, MergedFundDescription == "Scholarship")
+Sports75 <- filter(SeventyfivePlus, MergedFundDescription == "Sports Fund")
+Unrestricted75 <- filter(SeventyfivePlus, MergedFundDescription == "Unrestricted Fund")
+Emergency75 <- filter(SeventyfivePlus, MergedFundDescription == "Westminster Student Emergency Fund")
+```
+
+```{r}
+count(Department75$AverageGiftLevel1)
+count(Friends75$AverageGiftLevel1)
+count(Other75$AverageGiftLevel1)
+count(Scholarship75$AverageGiftLevel1)
+count(Sports75$AverageGiftLevel1)
+count(Unrestricted75$AverageGiftLevel1)
+count(Emergency75$AverageGiftLevel1)
+```
+
+Third Branch: 30-49 --> Gender
+```{r}
+count(Female$MaritalStatus)
+DivorcedF <- filter(Female, MaritalStatus == "Divorced")
+MarriedF <- filter(Female, MaritalStatus == "Married")
+SingleF <- filter(Female, MaritalStatus == "Single")
+WidowedF <- filter(Female, MaritalStatus == "Widowed")
+```
+
+```{r}
+count(DivorcedF$AverageGiftLevel1)
+count(MarriedF$AverageGiftLevel1)
+count(SingleF$AverageGiftLevel1)
+count(WidowedF$AverageGiftLevel1)
+```
+
+```{r}
+count(Male$MaritalStatus)
+DivorcedM <- filter(Male, MaritalStatus == "Divorced")
+MarriedM <- filter(Male, MaritalStatus == "Married")
+SingleM <- filter(Male, MaritalStatus == "Single")
+WidowedM <- filter(Male, MaritalStatus == "Widowed")
+```
+
+```{r}
+count(DivorcedM$AverageGiftLevel1)
+count(MarriedM$AverageGiftLevel1)
+count(SingleM$AverageGiftLevel1)
+count(WidowedM$AverageGiftLevel1)
+```
+
+Third Branch: 50+ --> Frat
+```{r}
+count(NoFrat$MaritalStatus)
+MarriedNo <- filter(NoFrat, MaritalStatus == "Married")
+SingleNo <- filter(NoFrat, MaritalStatus == "Single")
+WidowedNo <- filter(NoFrat, MaritalStatus == "Widowed")
+```
+
+```{r}
+count(MarriedNo$AverageGiftLevel1)
+count(SingleNo$AverageGiftLevel1)
+count(WidowedNo$AverageGiftLevel1)
+```
+
+```{r}
+count(YesFrat$Gender)
+FemaleF <- filter(YesFrat, Gender == "Female")
+MaleF <- filter(YesFrat, Gender == "Male")
+```
+
+```{r}
+count(FemaleF$AverageGiftLevel1)
+count(MaleF$AverageGiftLevel1)
+```
+
+
+
+
+Bad Model:
+
+```{r}
+count(trainData$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous
+
+tally(Deceased ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvDeceased
+
+tally(Ethnicity ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity
+
+tally(Religion ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvReligion
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvSchool
+
+tally(PrimaryEducationDegree ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvDegree
+
+tally(GiftType ~ AverageGiftLevel1, data = trainData) -> t
+as.data.frame.matrix(t) -> GiftvType
+
+View(GiftvAnonymous)
+View(GiftvDeceased)
+View(GiftvEthnicity)
+View(GiftvReligion)
+View(GiftvSchool)
+View(GiftvDegree)
+View(GiftvType)
+```
+
+Second Branch
+```{r}
+count(trainData$PrimaryEducationDegree)
+```
+
+```{r}
+BA <- filter(trainData, PrimaryEducationDegree == "BA")
+BS <- filter(trainData, PrimaryEducationDegree == "BS")
+Masters <- filter(trainData, PrimaryEducationDegree == "Master's/Doctoral Degrees")
+OtherUndergrad <- filter(trainData, PrimaryEducationDegree == "Other Undergraduate")
+UnknownDegree <- filter(trainData, PrimaryEducationDegree == "Unknown")
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.BA
+
+tally(Deceased ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.BA
+
+tally(Ethnicity ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.BA
+
+tally(Religion ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.BA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.BA
+
+tally(GiftType ~ AverageGiftLevel1, data = BA) -> t
+as.data.frame.matrix(t) -> GiftvType.BA
+
+View(GiftvAnonymous.BA)
+View(GiftvDeceased.BA)
+View(GiftvEthnicity.BA)
+View(GiftvReligion.BA)
+View(GiftvSchool.BA)
+View(GiftvType.BA)
+
+count(BA$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.BS
+
+tally(Deceased ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.BS
+
+tally(Ethnicity ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.BS
+
+tally(Religion ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.BS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.BS
+
+tally(GiftType ~ AverageGiftLevel1, data = BS) -> t
+as.data.frame.matrix(t) -> GiftvType.BS
+
+View(GiftvAnonymous.BS)
+View(GiftvDeceased.BS)
+View(GiftvEthnicity.BS)
+View(GiftvReligion.BS)
+View(GiftvSchool.BS)
+View(GiftvType.BS)
+
+count(BS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.Masters
+
+tally(Deceased ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.Masters
+
+tally(Ethnicity ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.Masters
+
+tally(Religion ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvReligion.Masters
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvSchool.Masters
+
+tally(GiftType ~ AverageGiftLevel1, data = Masters) -> t
+as.data.frame.matrix(t) -> GiftvType.Masters
+
+View(GiftvAnonymous.Masters)
+View(GiftvDeceased.Masters)
+View(GiftvEthnicity.Masters)
+View(GiftvReligion.Masters)
+View(GiftvSchool.Masters)
+View(GiftvType.Masters)
+
+count(Masters$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.OtherUndergrad
+
+tally(Deceased ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.OtherUndergrad
+
+tally(Ethnicity ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.OtherUndergrad
+
+tally(Religion ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvReligion.OtherUndergrad
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvSchool.OtherUndergrad
+
+tally(GiftType ~ AverageGiftLevel1, data = OtherUndergrad) -> t
+as.data.frame.matrix(t) -> GiftvType.OtherUndergrad
+
+View(GiftvAnonymous.OtherUndergrad)
+View(GiftvDeceased.OtherUndergrad)
+View(GiftvEthnicity.OtherUndergrad)
+View(GiftvReligion.OtherUndergrad)
+View(GiftvSchool.OtherUndergrad)
+View(GiftvType.OtherUndergrad)
+
+count(OtherUndergrad$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.UnknownDegree
+
+tally(Deceased ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.UnknownDegree
+
+tally(Ethnicity ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.UnknownDegree
+
+tally(Religion ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvReligion.UnknownDegree
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvSchool.UnknownDegree
+
+tally(GiftType ~ AverageGiftLevel1, data = UnknownDegree) -> t
+as.data.frame.matrix(t) -> GiftvType.UnknownDegree
+
+View(GiftvAnonymous.UnknownDegree)
+View(GiftvDeceased.UnknownDegree)
+View(GiftvEthnicity.UnknownDegree)
+View(GiftvReligion.UnknownDegree)
+View(GiftvSchool.UnknownDegree)
+View(GiftvType.UnknownDegree)
+
+count(UnknownDegree$AverageGiftLevel1)
+```
+
+
+Third Branch: BA-->Ethnicity
+```{r}
+count(BA$Ethnicity)
+```
+
+```{r}
+AsianBA <- filter(BA, Ethnicity == "Asian/Pacific Islander")
+BlackBA <- filter(BA, Ethnicity == "Black, non-Hispanic")
+EuroBA <- filter(BA, Ethnicity == "European (Caucasian)")
+HispanicBA <- filter(BA, Ethnicity == "Hispanic")
+UnknownBA <- filter(BA, Ethnicity == "Unknown")
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = AsianBA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.AsianBA
+
+tally(Deceased ~ AverageGiftLevel1, data = AsianBA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.AsianBA
+
+tally(Religion ~ AverageGiftLevel1, data = AsianBA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.AsianBA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = AsianBA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.AsianBA
+
+tally(GiftType ~ AverageGiftLevel1, data = AsianBA) -> t
+as.data.frame.matrix(t) -> GiftvType.AsianBA
+
+View(GiftvAnonymous.AsianBA)
+View(GiftvDeceased.AsianBA)
+View(GiftvReligion.AsianBA)
+View(GiftvSchool.AsianBA)
+View(GiftvType.AsianBA)
+
+count(AsianBA$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = BlackBA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.BlackBA
+
+tally(Deceased ~ AverageGiftLevel1, data = BlackBA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.BlackBA
+
+tally(Religion ~ AverageGiftLevel1, data = BlackBA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.BlackBA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = BlackBA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.BlackBA
+
+tally(GiftType ~ AverageGiftLevel1, data = BlackBA) -> t
+as.data.frame.matrix(t) -> GiftvType.BlackBA
+
+View(GiftvAnonymous.BlackBA)
+View(GiftvDeceased.BlackBA)
+View(GiftvReligion.BlackBA)
+View(GiftvSchool.BlackBA)
+View(GiftvType.BlackBA)
+
+count(BlackBA$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = EuroBA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.EuroBA
+
+tally(Deceased ~ AverageGiftLevel1, data = EuroBA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.EuroBA
+
+tally(Religion ~ AverageGiftLevel1, data = EuroBA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.EuroBA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = EuroBA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.EuroBA
+
+tally(GiftType ~ AverageGiftLevel1, data = EuroBA) -> t
+as.data.frame.matrix(t) -> GiftvType.EuroBA
+
+View(GiftvAnonymous.EuroBA)
+View(GiftvDeceased.EuroBA)
+View(GiftvReligion.EuroBA)
+View(GiftvSchool.EuroBA)
+View(GiftvType.EuroBA)
+
+count(EuroBA$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = HispanicBA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.HispanicBA
+
+tally(Deceased ~ AverageGiftLevel1, data = HispanicBA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.HispanicBA
+
+tally(Religion ~ AverageGiftLevel1, data = HispanicBA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.HispanicBA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = HispanicBA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.HispanicBA
+
+tally(GiftType ~ AverageGiftLevel1, data = HispanicBA) -> t
+as.data.frame.matrix(t) -> GiftvType.HispanicBA
+
+View(GiftvAnonymous.HispanicBA)
+View(GiftvDeceased.HispanicBA)
+View(GiftvReligion.HispanicBA)
+View(GiftvSchool.HispanicBA)
+View(GiftvType.HispanicBA)
+
+count(HispanicBA$AverageGiftLevel1)
+```
+
+
+Third Branch: BS --> Ethnicity
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = UnknownBA) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.UnknownBA
+
+tally(Deceased ~ AverageGiftLevel1, data = UnknownBA) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.UnknownBA
+
+tally(Religion ~ AverageGiftLevel1, data = UnknownBA) -> t
+as.data.frame.matrix(t) -> GiftvReligion.UnknownBA
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = UnknownBA) -> t
+as.data.frame.matrix(t) -> GiftvSchool.UnknownBA
+
+tally(GiftType ~ AverageGiftLevel1, data = UnknownBA) -> t
+as.data.frame.matrix(t) -> GiftvType.UnknownBA
+
+View(GiftvAnonymous.UnknownBA)
+View(GiftvDeceased.UnknownBA)
+View(GiftvReligion.UnknownBA)
+View(GiftvSchool.UnknownBA)
+View(GiftvType.UnknownBA)
+
+count(UnknownBA$AverageGiftLevel1)
+```
+
+```{r}
+count(BS$Ethnicity)
+```
+
+```{r}
+AsianBS <- filter(BS, Ethnicity == "Asian/Pacific Islander")
+BlackBS <- filter(BS, Ethnicity == "Black, non-Hispanic")
+EuroBS <- filter(BS, Ethnicity == "European (Caucasian)")
+HispanicBS <- filter(BS, Ethnicity == "Hispanic")
+TwoRacesBS <- filter(BS, Ethnicity == "Two or more Races")
+UnknownBS <- filter(BS, Ethnicity == "Unknown")
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = AsianBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.AsianBS
+
+tally(Deceased ~ AverageGiftLevel1, data = AsianBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.AsianBS
+
+tally(Religion ~ AverageGiftLevel1, data = AsianBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.AsianBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = AsianBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.AsianBS
+
+tally(GiftType ~ AverageGiftLevel1, data = AsianBS) -> t
+as.data.frame.matrix(t) -> GiftvType.AsianBS
+
+View(GiftvAnonymous.AsianBS)
+View(GiftvDeceased.AsianBS)
+View(GiftvReligion.AsianBS)
+View(GiftvSchool.AsianBS)
+View(GiftvType.AsianBS)
+
+count(AsianBS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = BlackBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.BlackBS
+
+tally(Deceased ~ AverageGiftLevel1, data = BlackBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.BlackBS
+
+tally(Religion ~ AverageGiftLevel1, data = BlackBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.BlackBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = BlackBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.BlackBS
+
+tally(GiftType ~ AverageGiftLevel1, data = BlackBS) -> t
+as.data.frame.matrix(t) -> GiftvType.BlackBS
+
+View(GiftvAnonymous.BlackBS)
+View(GiftvDeceased.BlackBS)
+View(GiftvReligion.BlackBS)
+View(GiftvSchool.BlackBS)
+View(GiftvType.BlackBS)
+
+count(BlackBS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = EuroBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.EuroBS
+
+tally(Deceased ~ AverageGiftLevel1, data = EuroBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.EuroBS
+
+tally(Religion ~ AverageGiftLevel1, data = EuroBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.EuroBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = EuroBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.EuroBS
+
+tally(GiftType ~ AverageGiftLevel1, data = EuroBS) -> t
+as.data.frame.matrix(t) -> GiftvType.EuroBS
+
+View(GiftvAnonymous.EuroBS)
+View(GiftvDeceased.EuroBS)
+View(GiftvReligion.EuroBS)
+View(GiftvSchool.EuroBS)
+View(GiftvType.EuroBS)
+
+count(EuroBS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = HispanicBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.HispanicBS
+
+tally(Deceased ~ AverageGiftLevel1, data = HispanicBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.HispanicBS
+
+tally(Religion ~ AverageGiftLevel1, data = HispanicBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.HispanicBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = HispanicBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.HispanicBS
+
+tally(GiftType ~ AverageGiftLevel1, data = HispanicBS) -> t
+as.data.frame.matrix(t) -> GiftvType.HispanicBS
+
+View(GiftvAnonymous.HispanicBS)
+View(GiftvDeceased.HispanicBS)
+View(GiftvReligion.HispanicBS)
+View(GiftvSchool.HispanicBS)
+View(GiftvType.HispanicBS)
+
+count(HispanicBS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = UnknownBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.UnknownBS
+
+tally(Deceased ~ AverageGiftLevel1, data = UnknownBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.UnknownBS
+
+tally(Religion ~ AverageGiftLevel1, data = UnknownBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.UnknownBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = UnknownBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.UnknownBS
+
+tally(GiftType ~ AverageGiftLevel1, data = UnknownBS) -> t
+as.data.frame.matrix(t) -> GiftvType.UnknownBS
+
+View(GiftvAnonymous.UnknownBS)
+View(GiftvDeceased.UnknownBS)
+View(GiftvReligion.UnknownBS)
+View(GiftvSchool.UnknownBS)
+View(GiftvType.UnknownBS)
+
+count(UnknownBS$AverageGiftLevel1)
+```
+
+```{r}
+tally(Anonymous. ~ AverageGiftLevel1, data = TwoRacesBS) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.TwoRacesBS
+
+tally(Deceased ~ AverageGiftLevel1, data = TwoRacesBS) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.TwoRacesBS
+
+tally(Religion ~ AverageGiftLevel1, data = TwoRacesBS) -> t
+as.data.frame.matrix(t) -> GiftvReligion.TwoRacesBS
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = TwoRacesBS) -> t
+as.data.frame.matrix(t) -> GiftvSchool.TwoRacesBS
+
+tally(GiftType ~ AverageGiftLevel1, data = TwoRacesBS) -> t
+as.data.frame.matrix(t) -> GiftvType.TwoRacesBS
+
+View(GiftvAnonymous.TwoRacesBS)
+View(GiftvDeceased.TwoRacesBS)
+View(GiftvReligion.TwoRacesBS)
+View(GiftvSchool.TwoRacesBS)
+View(GiftvType.TwoRacesBS)
+
+count(TwoRacesBS$AverageGiftLevel1)
+```
+
+Third Branch: Masters/Dr --> Anonymous
+
+```{r}
+count(Masters$Anonymous.)
+```
+
+```{r}
+NotAnonymous <- filter(Masters, Anonymous. == "No")
+YesAnonymous <- filter(Masters, Anonymous. == "Yes")
+```
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = NotAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.NotAnonymous
+
+tally(Deceased ~ AverageGiftLevel1, data = NotAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.NotAnonymous
+
+tally(Religion ~ AverageGiftLevel1, data = NotAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvReligion.NotAnonymous
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = NotAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvSchool.NotAnonymous
+
+tally(GiftType ~ AverageGiftLevel1, data = NotAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvType.NotAnonymous
+
+View(GiftvEthnicity.NotAnonymous)
+View(GiftvDeceased.NotAnonymous)
+View(GiftvReligion.NotAnonymous)
+View(GiftvSchool.NotAnonymous)
+View(GiftvType.NotAnonymous)
+
+count(NotAnonymous$AverageGiftLevel1)
+```
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = YesAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.YesAnonymous
+
+tally(Deceased ~ AverageGiftLevel1, data = YesAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvDeceased.YesAnonymous
+
+tally(Religion ~ AverageGiftLevel1, data = YesAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvReligion.YesAnonymous
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = YesAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvSchool.YesAnonymous
+
+tally(GiftType ~ AverageGiftLevel1, data = YesAnonymous) -> t
+as.data.frame.matrix(t) -> GiftvType.YesAnonymous
+
+View(GiftvEthnicity.YesAnonymous)
+View(GiftvDeceased.YesAnonymous)
+View(GiftvReligion.YesAnonymous)
+View(GiftvSchool.YesAnonymous)
+View(GiftvType.YesAnonymous)
+
+count(YesAnonymous$AverageGiftLevel1)
+```
+
+Third Branch: Other Undergraduate --> Deceased
+```{r}
+count(OtherUndergrad$Deceased)
+```
+
+```{r}
+NotDeceased <- filter(OtherUndergrad, Deceased == "No")
+YesDeceased <- filter(OtherUndergrad, Deceased == "Yes")
+```
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = NotDeceased) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.NotDeceased
+
+tally(Anonymous. ~ AverageGiftLevel1, data = NotDeceased) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.NotDeceased
+
+tally(Religion ~ AverageGiftLevel1, data = NotDeceased) -> t
+as.data.frame.matrix(t) -> GiftvReligion.NotDeceased
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = NotDeceased) -> t
+as.data.frame.matrix(t) -> GiftvSchool.NotDeceased
+
+tally(GiftType ~ AverageGiftLevel1, data = NotDeceased) -> t
+as.data.frame.matrix(t) -> GiftvType.NotDeceased
+
+View(GiftvEthnicity.NotDeceased)
+View(GiftvAnonymous.NotDeceased)
+View(GiftvReligion.NotDeceased)
+View(GiftvSchool.NotDeceased)
+View(GiftvType.NotDeceased)
+
+count(NotDeceased$AverageGiftLevel1)
+```
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = YesDeceased) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.YesDeceased
+
+tally(Anonymous. ~ AverageGiftLevel1, data = YesDeceased) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.YesDeceased
+
+tally(Religion ~ AverageGiftLevel1, data = YesDeceased) -> t
+as.data.frame.matrix(t) -> GiftvReligion.YesDeceased
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = YesDeceased) -> t
+as.data.frame.matrix(t) -> GiftvSchool.YesDeceased
+
+tally(GiftType ~ AverageGiftLevel1, data = YesDeceased) -> t
+as.data.frame.matrix(t) -> GiftvType.YesDeceased
+
+View(GiftvEthnicity.YesDeceased)
+View(GiftvAnonymous.YesDeceased)
+View(GiftvReligion.YesDeceased)
+View(GiftvSchool.YesDeceased)
+View(GiftvType.YesDeceased)
+
+count(YesDeceased$AverageGiftLevel1)
+```
+
+Third Branch: Unknown --> Deceased
+```{r}
+count(UnknownDegree$Deceased)
+```
+
+```{r}
+NotDeceasedUnknown <- filter(UnknownDegree, Deceased == "No")
+YesDeceasedUnknown <- filter(UnknownDegree, Deceased == "Yes")
+```
+
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = NotDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.NotDeceasedUnknown
+
+tally(Anonymous. ~ AverageGiftLevel1, data = NotDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.NotDeceasedUnknown
+
+tally(Religion ~ AverageGiftLevel1, data = NotDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvReligion.NotDeceasedUnknown
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = NotDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvSchool.NotDeceasedUnknown
+
+tally(GiftType ~ AverageGiftLevel1, data = NotDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvType.NotDeceasedUnknown
+
+View(GiftvEthnicity.NotDeceasedUnknown)
+View(GiftvAnonymous.NotDeceasedUnknown)
+View(GiftvReligion.NotDeceasedUnknown)
+View(GiftvSchool.NotDeceasedUnknown)
+View(GiftvType.NotDeceasedUnknown)
+
+count(NotDeceasedUnknown$AverageGiftLevel1)
+```
+
+```{r}
+tally(Ethnicity ~ AverageGiftLevel1, data = YesDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvEthnicity.YesDeceasedUnknown
+
+tally(Anonymous. ~ AverageGiftLevel1, data = YesDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvAnonymous.YesDeceasedUnknown
+
+tally(Religion ~ AverageGiftLevel1, data = YesDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvReligion.YesDeceasedUnknown
+
+tally(PrimaryEducationSchoolName ~ AverageGiftLevel1, data = YesDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvSchool.YesDeceasedUnknown
+
+tally(GiftType ~ AverageGiftLevel1, data = YesDeceasedUnknown) -> t
+as.data.frame.matrix(t) -> GiftvType.YesDeceasedUnknown
+
+View(GiftvEthnicity.YesDeceasedUnknown)
+View(GiftvAnonymous.YesDeceasedUnknown)
+View(GiftvReligion.YesDeceasedUnknown)
+View(GiftvSchool.YesDeceasedUnknown)
+View(GiftvType.YesDeceasedUnknown)
+
+count(YesDeceasedUnknown$AverageGiftLevel1)
+```
+
+____________________
+Decision Tree:
+Good Model:
+
+
+```{r}
+testData$DTClass <- NA
+for(i in 1:nrow(testData)) {
+  if(testData$TotalNumberOfGifts[i] == "0 - 19") {
+    if(testData$AgeLevel[i] == "Under 40") {
+      if(testData$State[i] == "Central TZ") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$State[i] == "Eastern TZ") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$State[i] == "Mountain TZ") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$State[i] == "Pacific TZ") {
+        testData$DTClass[i] = "50-99"
+      }
+    } else if(testData$AgeLevel[i] == "40-64") {
+      if(testData$MergedFundDescription[i] == "Department") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Friends of the Library/Celebrity Series") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Other Giving") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Scholarship") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Sports Fund") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Unrestricted Fund") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Westminster Student Emergency Fund") {
+        testData$DTClass[i] = "50-99"
+      }
+    } else if(testData$AgeLevel[i] == "65-74") {
+      if(testData$FratSorority[i] == "Not Recorded") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$FratSorority[i] == "Yes") {
+        testData$DTClass[i] = "50-99"
+      }
+    } else if(testData$AgeLevel[i] == "75+") {
+      if(testData$State[i] == "Central TZ") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$State[i] == "Eastern TZ") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$State[i] == "Mountain TZ") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$State[i] == "Pacific TZ") {
+        testData$DTClass[i] = "50-99"
+      }
+    } 
+  } else if(testData$TotalNumberOfGifts[i] == "20 - 29") {
+    if(testData$AgeLevel[i] == "Under 40") {
+      if(testData$MergedFundDescription[i] == "Department") {
+        testData$DTClass[i] = "1000+"
+      } else if(testData$MergedFundDescription[i] == "Friends of the Library/Celebrity Series") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Other Giving") {
+        testData$DTClass[i] = "1000+"
+      } else if(testData$MergedFundDescription[i] == "Scholarship") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Sports Fund") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Unrestricted Fund") {
+        testData$DTClass[i] = "100-999"
+      }
+    } else if(testData$AgeLevel[i] == "40-64") {
+      if(testData$MergedFundDescription[i] == "Department") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Friends of the Library/Celebrity Series") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Other Giving") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Scholarship") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Sports Fund") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Unrestricted Fund") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Westminster Student Emergency Fund") {
+        testData$DTClass[i] = "50-99"
+      }
+    } else if(testData$AgeLevel[i] == "65-74") {
+      if(testData$Gender[i] == "Female") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$Gender[i] == "Male") {
+        testData$DTClass[i] = "100-999"
+      }
+    } else if(testData$AgeLevel[i] == "75+") {
+      if(testData$MergedFundDescription[i] == "Department") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MergedFundDescription[i] == "Friends of the Library/Celebrity Series") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Other Giving") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Scholarship") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Sports Fund") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Unrestricted Fund") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MergedFundDescription[i] == "Westminster Student Emergency Fund") {
+        testData$DTClass[i] = "100-999"
+      }
+    }
+  } else if(testData$TotalNumberOfGifts[i] == "30 - 49") {
+    if(testData$Gender[i] == "Female") {
+      if(testData$MaritalStatus[i] == "Divorced") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Married") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Single") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Widowed") {
+        testData$DTClass[i] = "50-99"
+      }
+    } else if(testData$Gender[i] == "Male") {
+       if(testData$MaritalStatus[i] == "Divorced") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MaritalStatus[i] == "Married") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Single") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Widowed") {
+        testData$DTClass[i] = "100-999"
+      }
+    }
+  } else if(testData$TotalNumberOfGifts[i] == "50+") {
+    if(testData$FratSorority[i] == "Not Recorded") {
+      if(testData$MaritalStatus[i] == "Married") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$MaritalStatus[i] == "Single") {
+        testData$DTClass[i] = "50-99"
+      } else if(testData$MaritalStatus[i] == "Widowed") {
+        testData$DTClass[i] = "100-999"
+      }
+    } else if(testData$FratSorority[i] == "Yes") {
+      if(testData$Gender[i] == "Female") {
+        testData$DTClass[i] = "100-999"
+      } else if(testData$Gender[i] == "Male") {
+        testData$DTClass[i] = "100-999"
+      } 
+    }
+  }
+}
+```
+
+
+
+Second Model:
+
+```{r}
+testData$DTClassB <- NA
+for(i in 1:nrow(testData)) {
+  if(testData$PrimaryEducationDegree[i] == "BA") {
+    if(testData$Ethnicity[i] == "Asian/Pacific Islander") {
+      if(testData$GiftType[i] == "Cash") {
+          testData$DTClassB[i] = "100-999"
+      } else if(testData$GiftType[i] == "Pay-Type") {
+          testData$DTClassB[i] = "100-999"
+      } 
+      } else if(testData$Ethnicity[i] == "Black, non-Hispanic") {
+        if(testData$GiftType[i] == "Cash") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$GiftType[i] == "Pay-Type") {
+          testData$DTClassB[i] = "50-99"
+        } 
+      } else if(testData$Ethnicity[i] == "European (Caucasian)") {
+        if(testData$Deceased[i] == "Yes") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$Deceased[i] == "No") {
+          testData$DTClassB[i] = "50-99"
+        } 
+      } else if(testData$Ethnicity[i] == "Hispanic") {
+        testData$DTClassB[i] = "50-99"
+      } else if(testData$Ethnicity[i] == "Unknown") {
+        if(testData$Anonymous.[i] == "Yes") {
+          testData$DTClassB[i] = "1,000+"
+        } else if(testData$Anonymous.[i] == "No") {
+          testData$DTClassB[i] = "100-999"
+        }
+      }
+    } else if(testData$PrimaryEducationDegree[i] == "BS") {
+      if(testData$Ethnicity[i] == "Asian/Pacific Islander") {
+          testData$DTClassB[i] = "100-999"
+      } else if(testData$Ethnicity[i] == "Black, non-Hispanic") {
+        if(testData$Religion[i] == "Other") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$Religion[i] == "Unknown") {
+          testData$DTClassB[i] = "100-999"
+        } 
+      } else if(testData$Ethnicity[i] == "European (Caucasian)") {
+        if(testData$GiftType[i] == "Cash") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$GiftType[i] == "Pay-Type") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$GiftType[i] == "Recurring or Stock/Property") {
+          testData$DTClassB[i] = "100-999"
+        }
+      } else if(testData$Ethnicity[i] == "Hispanic") {
+        testData$DTClassB[i] = "100-999"
+      } else if(testData$Ethnicity[i] == "Unknown") {
+        if(testData$GiftType[i] == "Cash") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$GiftType[i] == "Recurring or Stock/Property") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$GiftType[i] == "Pay-Type") {
+          testData$DTClassB[i] = "100-999"
+        }
+      } else if(testData$Ethnicity[i] == "Two or more Races") {
+        testData$DTClassB[i] = "50-99"
+      }
+    } else if(testData$PrimaryEducationDegree[i] == "Master's/Doctoral Degrees") {
+      if(testData$Anonymous.[i] == "No") {
+        if(testData$Ethnicity[i] == "European (Caucasian)") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$Ethnicity[i] == "Unknown") {
+          testData$DTClassB[i] = "50-99"
+        }
+      } else if(testData$Anonymous.[i] == "Yes") {
+        testData$DTClassB[i] = "1,000+"
+      }
+    } else if(testData$PrimaryEducationDegree[i] == "Other Undergraduate") {
+      if(testData$Deceased[i] == "No") {
+        if(testData$Ethnicity[i] == "Asian/Pacific Islander") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$Ethnicity[i] == "Black, non-Hispanic") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$Ethnicity[i] == "European (Caucasian)") {
+          testData$DTClassB[i] = "50-99"
+        } else if(testData$Ethnicity[i] == "Unknown") {
+          testData$DTClassB[i] = "100-999"
+        }
+      } else if(testData$Deceased[i] == "Yes") {
+        if(testData$Ethnicity[i] == "Black, non-Hispanic") {
+          testData$DTClassB[i] = "100-999"
+        } else if(testData$Ethnicity[i] == "Unknown") {
+          testData$DTClassB[i] = "100-999"
+        }
+      } else if(testData$Ethnicity[i] == "Unknown") {
+        testData$DTClassB[i] = "100-999"
+      }
+    } else if(testData$PrimaryEducationDegree[i] == "Unknown") {
+    if(testData$Deceased[i] == "No") {
+       if(testData$GiftType[i] == "Cash") {
+         testData$DTClassB[i] = "50-99"
+       } else if(testData$GiftType[i] == "Pay-Type") {
+         testData$DTClassB[i] = "50-99"
+       } else if(testData$GiftType[i] == "Recurring or Stock/Property") {
+         testData$DTClassB[i] = "100-999"
+       }
+    } else if(testData$Deceased[i] == "Yes") {
+      if(testData$PrimaryEducationSchoolName[i] == "Unknown") {
+        testData$DTClassB[i] = "100-999"
+      } else if(testData$PrimaryEducationSchoolName[i] == "Westminster") {
+        testData$DTClassB[i] = "100-999"
+      }
+    } 
+  }
+}
+```
+
+k-modes with test set:
+First Model:
+
+```{r}
+WCSubsetTest <- subset(testData, select = c(AverageGiftLevel1, MergedFundDescription, TotalNumberOfGifts, State, Gender, AgeLevel, MaritalStatus, FratSorority))
+```
+
+```{r}
+set.seed(5)
+clusterTest <- kmodes(WCSubsetTest, 20)
+```
+
+```{r}
+clusterTest$Size
+clusterTest$modes
+clusterTest$withindiff
+```
+
+put cluster ID into column of dataframe
+```{r}
+testData$kClass=rep(NA,nrow(testData))  #create the variable
+testData$kClass <- clusterTest$cluster
+```
+
+Second Model:
+
+```{r}
+WCSubsetTestC <- subset(testData, select = c(AverageGiftLevel1, Anonymous., PrimaryEducationSchoolName, Deceased, Ethnicity, PrimaryEducationDegree, Religion, GiftType))
+```
+
+```{r}
+set.seed(5)
+clusterTestC <- kmodes(clusterTestC, 20)
+```
+
+```{r}
+clusterTestC$size
+clusterTestC$modes
+clusterTestC$withindiff
+```
+
+```{r}
+testData$kClassC=rep(NA,nrow(testData))  #create the variable
+testData$kClassC <- clusterTestC$cluster
+head(testData$kClassC)
+```
+
+Convert algorithm results to levels
+```{r}
+testData$kClassify=rep(NA,nrow(testData))  #create the variable
+testData$levelC=rep(NA,nrow(testData))  #create the variable
+
+testData$kClass <- as.integer(testData$kClass)
+testData$kClassC <- as.integer(testData$kClassC)
+
+```
+
+First model:
+
+```{r}
+for(i in 1:nrow(testData)) {
+  if(testData$kClass[i] == 1) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 2) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 3) {
+    testData$kClassify[i] == "100-999"
+  } else if(testData$kClass[i] == 4) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 5) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 6) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 7) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 8) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 9) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 10) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 11) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 12) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 13) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 14) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 15) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 16) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 17) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 18) {
+    testData$kClassify[i] = "50-99"
+  } else if(testData$kClass[i] == 19) {
+    testData$kClassify[i] = "100-999"
+  } else if(testData$kClass[i] == 20) {
+    testData$kClassify[i] = "50-99"
+  } 
+}
+
+```
+
+Second Model:
+
+```{r}
+for(i in 1:nrow(testData)) {
+  if(testData$kClassC[i] == 1) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 2) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 3) {
+    testData$levelC[i] == "1,000+"
+  } else if(testData$kClassC[i] == 4) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 5) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 6) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 7) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 8) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 9) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 10) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 11) {
+    testData$levelC[i]= "50-99"
+  } else if(testData$kClassC[i] == 12) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 13) {
+    testData$levelC[i]= "50-99"
+  } else if(testData$kClassC[i] == 14) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 15) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 16) {
+    testData$levelC[i] = "1,000+"
+  } else if(testData$kClassC[i] == 17) {
+    testData$levelC[i] = "100-999"
+  } else if(testData$kClassC[i] == 18) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 19) {
+    testData$levelC[i] = "50-99"
+  } else if(testData$kClassC[i] == 20) {
+    testData$levelC[i] = "50-99"
+  }
+}
+
+```
+
+
+```{r}
+numMatch = 0
+numMis = 0
+
+numMatch1 = 0
+numMis1 = 0
+
+numMatch2 = 0
+numMis2 = 0
+
+numMatch3 = 0
+numMis3 = 0
+
+numMatch4 = 0
+numMis4 = 0
+```
+
+```{r}
+# comparing first decision tree to algorithm
+for(i in 1:nrow(testData)) {
+  if(identical(testData$DTClass[i], testData$kClassify[i])) {
+    numMatch1 = numMatch1 + 1
+  } else {
+    numMis1 = numMis1 + 1
+  }
+}
+
+numMatch1
+numMis1
+```
+
+```{r}
+# comparing first decision tree to AGL (actual)
+for(i in 1:nrow(testData)) {
+  if(identical(testData$DTClass[i], testData$AverageGiftLevel1[i])) {
+    numMatch2 = numMatch2 + 1
+  } else {
+    numMis2 = numMis2 + 1
+  }
+}
+
+numMatch2
+numMis2
+```
+
+```{r}
+# comparing first algorithm to AGL (actual)
+for(i in 1:nrow(testData)) {
+  if(identical(testData$kClassify[i], testData$AverageGiftLevel1[i])) {
+    numMatch3 = numMatch3 + 1
+  } else {
+    numMis3 = numMis3 + 1
+  }
+}
+
+numMatch3
+numMis3
+```
+
+
+```{r}
+# comparing second decision tree to AGL (actual)
+for(i in 1:nrow(testData)) {
+  if(identical(testData$DTClassB[i], testData$AverageGiftLevel1[i])) {
+    numMatch4 = numMatch4 + 1
+  } else {
+    numMis4 = numMis4 + 1
+  }
+}
+
+numMatch4
+numMis4
+```
+
+
+```{r}
+# comparing second algorithm to actual
+for(i in 1:nrow(testData)) {
+  if(identical(testData$levelC[i], testData$AverageGiftLevel1[i])) {
+    numMatch = numMatch + 1
+  } else {
+    numMis = numMis + 1
+  }
+}
+
+numMatch
+numMis
+```
+
+
+
